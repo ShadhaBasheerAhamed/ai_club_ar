@@ -56,8 +56,8 @@ export const BouquetViewer: React.FC = () => {
         shadow-softness="0.8"
         exposure="1.15"
         loading="eager"
-        onLoad={() => setModelLoaded(true)}
-        onError={() => setModelError(true)}
+        onLoad={() => { console.log('model-viewer: loaded'); setModelLoaded(true); }}
+        onError={(e: any) => { console.error('model-viewer error:', e); setModelError(true); }}
         className="w-full h-full cursor-grab active:cursor-grabbing outline-none"
       >
         <div slot="ar-button" className="hidden" />
