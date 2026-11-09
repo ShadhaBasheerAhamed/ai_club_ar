@@ -10,7 +10,7 @@ export const BouquetViewer: React.FC = () => {
   const [modelError, setModelError] = useState(false);
   const [arSupported, setArSupported] = useState(false);
   const [arActive, setArActive] = useState(false);
-  const startARFnRef = useRef<(() => void) | null>(null);
+  const startARRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -22,13 +22,7 @@ export const BouquetViewer: React.FC = () => {
     let controls: OrbitControls;
     let mixer: THREE.AnimationMixer;
     let model: THREE.Object3D;
-    let rafId: number;
     let xrSession: any = null;
-    let xrRefSpace: any = null;
-    let hitTestSource: any = null;
-    let anchor: any = null;
-    let onResizeHandler: () => void;
-    let animateFn: () => void;
 
     const isIOS = /iPad|iPhone|iPod/.test(navigator.platform) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const isAndroid = /Android/.test(navigator.userAgent);
@@ -122,76 +116,41 @@ export const BouquetViewer: React.FC = () => {
         }
       );
 
-      onResizeHandler = () => {
+      const onResize = () => {
         if (!camera || !renderer) return;
         camera.aspect = container.clientWidth / container.clientHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(container.clientWidth, container.clientHeight);
       };
-      window.addEventListener('resize', onResizeHandler);
+      window.addEventListener('resize', onResize);
 
-      const onXRFrame = (time: any, frame: any) => {
-        const session = frame.session;
-        if (!xrRefSpace) {
-          xrRefSpace = frame.getReferenceSpace('local-floor');
-        }
-        if (!hitTestSource && session.requestHitTestSource) {
-          session.requestHitTestSource({ space: xrRefSpace }).then((source: any) => {
-            hitTestSource = source;
-          });
-        }
-
-        const pose = frame.getViewerPose(xrRefSpace);
-        if (pose) {
-          const view = pose.views[0];
-          const viewport = session.requestRenderState().baseLayer?.getViewport(view);
-          if (viewport) {
-            renderer.setViewport(viewport.x, viewport.y, viewport.width, viewport.height);
-            renderer.render(scene, camera);
-          }
-        }
-
-        if (hitTestSource && model) {
-          const hitTestResults = frame.getHitTestResults(hitTestSource);
-          if (hitTestResults.length > 0) {
-            const hit = hitTestResults[0];
-            const pose = hit.getPose(xrRefSpace);
-            if (pose && !anchor) {
-              anchor = pose.transform;
-              model.position.set(anchor.position.x, anchor.position.y, anchor.position.z);
-              model.quaternion.set(anchor.quaternion.x, anchor.quaternion.y, anchor.quaternion.z, anchor.quaternion.w);
-            }
-          }
-        }
-
+      const animate = () => {
         if (mixer) mixer.update(0.016);
-        if (controls) controls.update();
-        rafId = requestAnimationFrame(() => session.requestAnimationFrame(onXRFrame));
-      };
-
-      animateFn = () => {
-        if (xrSession) {
-          xrSession.requestAnimationFrame(onXRFrame);
-          return;
-        }
-        rafId = requestAnimationFrame(animateFn);
-        const delta = 0.016;
-        if (mixer) mixer.update(delta);
-        if (controls) controls.update();
+        if (controls && !xrSession) controls.update();
         if (renderer && scene && camera) renderer.render(scene, camera);
       };
-      animateFn();
+      renderer.setAnimationLoop(animate);
 
-      startARFnRef.current = async () => {
+      const startAR = async () => {
         try {
           const xr = (navigator as any).xr;
-          if (xr) {
+          if (xr?.requestSession) {
             const session = await xr.requestSession('immersive-ar', {
               requiredFeatures: ['hit-test'],
             });
             xrSession = session;
             renderer.xr.setSession(session);
             setArActive(true);
+
+            session.addEventListener('end', () => {
+              xrSession = null;
+              setArActive(false);
+              renderer.xr.setSession(null);
+              controls.enabled = true;
+              controls.autoRotate = true;
+            });
+            controls.enabled = false;
+            controls.autoRotate = false;
             return;
           }
 
@@ -217,13 +176,17 @@ export const BouquetViewer: React.FC = () => {
           setArActive(false);
         }
       };
-    };
+      startARRef.current = startAR;
 
-    init();
+      const stopAR = () => {
+        if (xrSession) {
+          xrSession.end().catch(() => {});
+        }
+      };
 
     return () => {
-      window.removeEventListener('resize', onResizeHandler);
-      cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', onResize);
+      renderer.setAnimationLoop(null);
       if (xrSession) {
         xrSession.end().catch(() => {});
       }
@@ -234,6 +197,9 @@ export const BouquetViewer: React.FC = () => {
       }
       if (container) container.innerHTML = '';
     };
+    };
+
+    return init();
   }, []);
 
   return (
@@ -256,7 +222,7 @@ export const BouquetViewer: React.FC = () => {
 
       <div className="absolute bottom-4 inset-x-0 flex justify-center px-4 pointer-events-auto">
         <button
-          onClick={() => startARFnRef.current?.()}
+          onClick={() => startARRef.current?.()}
           disabled={!modelLoaded || arActive}
           className="group relative inline-flex items-center justify-center px-6 py-3.5 text-sm font-semibold tracking-wider uppercase text-white bg-gradient-to-r from-rose-600 via-pink-600 to-rose-700 rounded-full shadow-lg shadow-rose-600/40 hover:shadow-rose-600/60 hover:scale-105 active:scale-95 transition-all duration-300 border border-white/20 disabled:opacity-50 disabled:pointer-events-none"
         >
