@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { CAMPAIGN_INFO } from '../../data/students';
 
 declare global {
@@ -11,7 +11,15 @@ declare global {
 
 export const BouquetViewer: React.FC = () => {
   const [modelLoaded, setModelLoaded] = useState(false);
+  const [modelError, setModelError] = useState(false);
   const modelViewerRef = useRef<any>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!modelLoaded && !modelError) setModelError(true);
+    }, 12000);
+    return () => clearTimeout(timer);
+  }, [modelLoaded, modelError]);
 
   const handleLaunchAR = () => {
     if (modelViewerRef.current && typeof modelViewerRef.current.activateAR === 'function') {
@@ -21,10 +29,16 @@ export const BouquetViewer: React.FC = () => {
 
   return (
     <div className="relative w-full max-w-md mx-auto aspect-square rounded-3xl overflow-hidden shadow-2xl bg-gradient-to-b from-rose-950/20 via-pink-950/10 to-rose-950/30 border border-rose-300/20 backdrop-blur-md">
-      {!modelLoaded && (
+      {!modelLoaded && !modelError && (
         <div className="absolute inset-0 flex flex-col items-center justify-center space-y-3 z-10 bg-slate-900/60 backdrop-blur-sm">
           <div className="w-10 h-10 border-4 border-rose-400 border-t-transparent rounded-full animate-spin" />
           <p className="text-sm text-rose-200 tracking-wider font-light">Arranging your fresh flowers...</p>
+        </div>
+      )}
+      {modelError && !modelLoaded && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center space-y-3 z-10 bg-slate-900/60 backdrop-blur-sm">
+          <div className="w-10 h-10 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center text-3xl mb-3">⚠️</div>
+          <p className="text-xs text-rose-300 text-center px-4">AR model unavailable on this device</p>
         </div>
       )}
       <model-viewer
@@ -43,6 +57,7 @@ export const BouquetViewer: React.FC = () => {
         exposure="1.15"
         loading="eager"
         onLoad={() => setModelLoaded(true)}
+        onError={() => setModelError(true)}
         className="w-full h-full cursor-grab active:cursor-grabbing outline-none"
       >
         <div slot="ar-button" className="hidden" />
