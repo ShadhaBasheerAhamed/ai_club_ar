@@ -145,7 +145,7 @@ export const GiftAdmin: React.FC = () => {
                   </div>
                   <div className="border-t border-rose-100 pt-3 text-center space-y-1">
                     <p className="text-[10px] text-slate-600 italic leading-snug">"Every great innovation starts with curiosity. Keep dreaming, keep exploring, and keep creating!"</p>
-                    <p className="text-[11px] font-semibold text-rose-600">With Love, AI CLUB ❤️</p>
+                    <p className="text-[11px] font-semibold text-rose-600">With Love, Shadha Basheer Ahamed maam , AI CLUB ❤️</p>
                   </div>
                 </div>
               );

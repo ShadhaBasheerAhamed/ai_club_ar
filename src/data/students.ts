@@ -30,7 +30,7 @@ export const CAMPAIGN_INFO = {
   title: "A BLOOM JUST FOR YOU",
   heading: "HAPPY CHILDREN'S DAY 2026!",
   subheading: "Every great innovation starts with curiosity. Keep dreaming, keep exploring, and keep creating!",
-  footer: "With Love, AI CLUB ❤️",
+  footer: "Shadha Basheer Ahamed maam , AI CLUB ❤️",
   bouquetModelGlb: "/bouquet.glb",
   bouquetModelUsdz: "",
 };
