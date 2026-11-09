@@ -8,6 +8,9 @@ export const BouquetViewer: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [modelLoaded, setModelLoaded] = useState(false);
   const [modelError, setModelError] = useState(false);
+  const [arSupported, setArSupported] = useState(false);
+  const [arActive, setArActive] = useState(false);
+  const startARFnRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -20,9 +23,24 @@ export const BouquetViewer: React.FC = () => {
     let mixer: THREE.AnimationMixer;
     let model: THREE.Object3D;
     let rafId: number;
+    let xrSession: any = null;
+    let xrRefSpace: any = null;
+    let hitTestSource: any = null;
+    let anchor: any = null;
+    let onResizeHandler: () => void;
+    let animateFn: () => void;
 
     const isIOS = /iPad|iPhone|iPod/.test(navigator.platform) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const isAndroid = /Android/.test(navigator.userAgent);
+
+    const checkXR = async () => {
+      const xr = (navigator as any).xr;
+      if (xr?.isSessionSupported) {
+        const supported = await xr.isSessionSupported('immersive-ar');
+        setArSupported(supported);
+      }
+    };
+    checkXR();
 
     const init = () => {
       scene = new THREE.Scene();
@@ -37,6 +55,7 @@ export const BouquetViewer: React.FC = () => {
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.xr.enabled = true;
       container.appendChild(renderer.domElement);
 
       controls = new OrbitControls(camera, renderer.domElement);
@@ -65,10 +84,10 @@ export const BouquetViewer: React.FC = () => {
       const loader = new GLTFLoader();
       loader.load(
         CAMPAIGN_INFO.bouquetModelGlb,
-        (gltf) => {
+        (gltf: any) => {
           model = gltf.scene;
-          model.traverse((child) => {
-            if ((child as THREE.Mesh).isMesh) {
+          model.traverse((child: any) => {
+            if (child.isMesh) {
               child.castShadow = true;
               child.receiveShadow = true;
             }
@@ -86,7 +105,7 @@ export const BouquetViewer: React.FC = () => {
 
           if (gltf.animations && gltf.animations.length > 0) {
             mixer = new THREE.AnimationMixer(model);
-            gltf.animations.forEach((clip) => {
+            gltf.animations.forEach((clip: any) => {
               mixer.clipAction(clip).play();
             });
           }
@@ -97,65 +116,125 @@ export const BouquetViewer: React.FC = () => {
           setModelLoaded(true);
         },
         undefined,
-        (err) => {
+        (err: any) => {
           console.error('GLTFLoader error:', err);
           setModelError(true);
         }
       );
 
-      const onResize = () => {
+      onResizeHandler = () => {
         if (!camera || !renderer) return;
         camera.aspect = container.clientWidth / container.clientHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(container.clientWidth, container.clientHeight);
       };
-      window.addEventListener('resize', onResize);
+      window.addEventListener('resize', onResizeHandler);
 
-      const animate = () => {
-        rafId = requestAnimationFrame(animate);
+      const onXRFrame = (time: any, frame: any) => {
+        const session = frame.session;
+        if (!xrRefSpace) {
+          xrRefSpace = frame.getReferenceSpace('local-floor');
+        }
+        if (!hitTestSource && session.requestHitTestSource) {
+          session.requestHitTestSource({ space: xrRefSpace }).then((source: any) => {
+            hitTestSource = source;
+          });
+        }
+
+        const pose = frame.getViewerPose(xrRefSpace);
+        if (pose) {
+          const view = pose.views[0];
+          const viewport = session.requestRenderState().baseLayer?.getViewport(view);
+          if (viewport) {
+            renderer.setViewport(viewport.x, viewport.y, viewport.width, viewport.height);
+            renderer.render(scene, camera);
+          }
+        }
+
+        if (hitTestSource && model) {
+          const hitTestResults = frame.getHitTestResults(hitTestSource);
+          if (hitTestResults.length > 0) {
+            const hit = hitTestResults[0];
+            const pose = hit.getPose(xrRefSpace);
+            if (pose && !anchor) {
+              anchor = pose.transform;
+              model.position.set(anchor.position.x, anchor.position.y, anchor.position.z);
+              model.quaternion.set(anchor.quaternion.x, anchor.quaternion.y, anchor.quaternion.z, anchor.quaternion.w);
+            }
+          }
+        }
+
+        if (mixer) mixer.update(0.016);
+        if (controls) controls.update();
+        rafId = requestAnimationFrame(() => session.requestAnimationFrame(onXRFrame));
+      };
+
+      animateFn = () => {
+        if (xrSession) {
+          xrSession.requestAnimationFrame(onXRFrame);
+          return;
+        }
+        rafId = requestAnimationFrame(animateFn);
         const delta = 0.016;
         if (mixer) mixer.update(delta);
         if (controls) controls.update();
         if (renderer && scene && camera) renderer.render(scene, camera);
       };
-      animate();
+      animateFn();
 
-      return () => {
-        window.removeEventListener('resize', onResize);
-        cancelAnimationFrame(rafId);
-        if (controls) controls.dispose();
-        if (renderer) {
-          renderer.renderLists.dispose();
-          renderer.dispose();
+      startARFnRef.current = async () => {
+        try {
+          const xr = (navigator as any).xr;
+          if (xr) {
+            const session = await xr.requestSession('immersive-ar', {
+              requiredFeatures: ['hit-test'],
+            });
+            xrSession = session;
+            renderer.xr.setSession(session);
+            setArActive(true);
+            return;
+          }
+
+          const modelUrl = CAMPAIGN_INFO.bouquetModelGlb;
+          const fullUrl = typeof window !== 'undefined' ? `${window.location.origin}${modelUrl}` : modelUrl;
+
+          if (isIOS) {
+            const a = document.createElement('a');
+            a.rel = 'ar';
+            a.href = fullUrl;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          } else if (isAndroid) {
+            const intentUrl = `intent://intent/#Intent;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;package=com.google.ar.sceneviewer;S.browser_fallback_url=${encodeURIComponent(fullUrl)};end`;
+            window.location.href = intentUrl;
+          } else {
+            window.open(fullUrl, '_blank');
+          }
+        } catch (err: any) {
+          console.error('AR error:', err);
+          setArActive(false);
         }
-        if (container) container.innerHTML = '';
       };
     };
 
     init();
+
+    return () => {
+      window.removeEventListener('resize', onResizeHandler);
+      cancelAnimationFrame(rafId);
+      if (xrSession) {
+        xrSession.end().catch(() => {});
+      }
+      if (controls) controls.dispose();
+      if (renderer) {
+        renderer.renderLists.dispose();
+        renderer.dispose();
+      }
+      if (container) container.innerHTML = '';
+    };
   }, []);
-
-  const handleOpenAR = () => {
-    const modelUrl = CAMPAIGN_INFO.bouquetModelGlb;
-    const fullUrl = typeof window !== 'undefined' ? `${window.location.origin}${modelUrl}` : modelUrl;
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.platform) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    const isAndroid = /Android/.test(navigator.userAgent);
-
-    if (isIOS) {
-      const a = document.createElement('a');
-      a.rel = 'ar';
-      a.href = fullUrl;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    } else if (isAndroid) {
-      const intentUrl = `intent://intent/#Intent;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;package=com.google.ar.sceneviewer;S.browser_fallback_url=${encodeURIComponent(fullUrl)};end`;
-      window.location.href = intentUrl;
-    } else {
-      window.open(fullUrl, '_blank');
-    }
-  };
 
   return (
     <div className="relative w-full max-w-md mx-auto aspect-square rounded-3xl overflow-hidden shadow-2xl bg-gradient-to-b from-rose-950/20 via-pink-950/10 to-rose-950/30 border border-rose-300/20 backdrop-blur-md">
@@ -177,17 +256,18 @@ export const BouquetViewer: React.FC = () => {
 
       <div className="absolute bottom-4 inset-x-0 flex justify-center px-4 pointer-events-auto">
         <button
-          onClick={handleOpenAR}
-          className="group relative inline-flex items-center justify-center px-6 py-3.5 text-sm font-semibold tracking-wider uppercase text-white bg-gradient-to-r from-rose-600 via-pink-600 to-rose-700 rounded-full shadow-lg shadow-rose-600/40 hover:shadow-rose-600/60 hover:scale-105 active:scale-95 transition-all duration-300 border border-white/20"
+          onClick={() => startARFnRef.current?.()}
+          disabled={!modelLoaded || arActive}
+          className="group relative inline-flex items-center justify-center px-6 py-3.5 text-sm font-semibold tracking-wider uppercase text-white bg-gradient-to-r from-rose-600 via-pink-600 to-rose-700 rounded-full shadow-lg shadow-rose-600/40 hover:shadow-rose-600/60 hover:scale-105 active:scale-95 transition-all duration-300 border border-white/20 disabled:opacity-50 disabled:pointer-events-none"
         >
           <svg className="w-5 h-5 mr-2 -ml-1 text-white animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5" />
           </svg>
-          View Bouquet in AR
+          {arActive ? 'AR Active' : arSupported ? 'View Bouquet in AR' : 'View 3D Bouquet'}
         </button>
       </div>
       <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-[10px] tracking-widest uppercase text-rose-200">
-        Touch &amp; Drag to Rotate 3D
+        {arActive ? 'AR Mode - Move phone to scan' : 'Touch &amp; Drag to Rotate 3D'}
       </div>
     </div>
   );
