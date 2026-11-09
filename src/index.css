@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@media print {
+  @page { size: A4 portrait; margin: 8mm; }
+  body { background: #ffffff !important; color: #000000 !important; }
+  .print\:hidden { display: none !important; }
+  .page-break-inside-avoid { break-inside: avoid; page-break-inside: avoid; }
+  .greeting-card { border: 1px dashed #cbd5e1 !important; background: #ffffff !important; box-shadow: none !important; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
