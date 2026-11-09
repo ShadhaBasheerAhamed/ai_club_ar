@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getStudentBySlug, CAMPAIGN_INFO } from '../data/students';
-import { BouquetViewer } from '../components/gift/BouquetViewer';
-import { PetalCanvas } from '../components/gift/PetalCanvas';
+import { BouquetViewer } from '../components/gift/BouquetViewer';import { PetalCanvas } from '../components/gift/PetalCanvas';
 
 export const GiftExperience: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -53,7 +52,7 @@ export const GiftExperience: React.FC = () => {
             </div>
           </div>
           <div className="w-full">
-            <BouquetViewer />
+            <BouquetViewer modelUrl={student.modelGlb} />
             <p className="text-center text-xs text-rose-300/70 mt-3 font-light">Tap the AR button on your smartphone camera to place your bouquet in your room!</p>
           </div>
           <div className="relative p-8 sm:p-10 rounded-3xl bg-slate-900/60 backdrop-blur-xl border border-rose-300/20 shadow-2xl space-y-6">

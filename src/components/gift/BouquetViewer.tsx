@@ -2,9 +2,12 @@ import React, { useRef, useState, useEffect } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { CAMPAIGN_INFO } from '../../data/students';
 
-export const BouquetViewer: React.FC = () => {
+interface BouquetViewerProps {
+  modelUrl: string;
+}
+
+export const BouquetViewer: React.FC<BouquetViewerProps> = ({ modelUrl }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [modelLoaded, setModelLoaded] = useState(false);
   const [modelError, setModelError] = useState(false);
@@ -77,7 +80,7 @@ export const BouquetViewer: React.FC = () => {
 
       const loader = new GLTFLoader();
       loader.load(
-        CAMPAIGN_INFO.bouquetModelGlb,
+        modelUrl,
         (gltf: any) => {
           model = gltf.scene;
           model.traverse((child: any) => {
@@ -154,7 +157,6 @@ export const BouquetViewer: React.FC = () => {
             return;
           }
 
-          const modelUrl = CAMPAIGN_INFO.bouquetModelGlb;
           const fullUrl = typeof window !== 'undefined' ? `${window.location.origin}${modelUrl}` : modelUrl;
 
           if (isIOS) {
@@ -176,31 +178,26 @@ export const BouquetViewer: React.FC = () => {
           setArActive(false);
         }
       };
+
       startARRef.current = startAR;
 
-      const stopAR = () => {
+      return () => {
+        window.removeEventListener('resize', onResize);
+        renderer.setAnimationLoop(null);
         if (xrSession) {
           xrSession.end().catch(() => {});
         }
+        if (controls) controls.dispose();
+        if (renderer) {
+          renderer.renderLists.dispose();
+          renderer.dispose();
+        }
+        if (container) container.innerHTML = '';
       };
-
-    return () => {
-      window.removeEventListener('resize', onResize);
-      renderer.setAnimationLoop(null);
-      if (xrSession) {
-        xrSession.end().catch(() => {});
-      }
-      if (controls) controls.dispose();
-      if (renderer) {
-        renderer.renderLists.dispose();
-        renderer.dispose();
-      }
-      if (container) container.innerHTML = '';
-    };
     };
 
-    return init();
-  }, []);
+    init();
+  }, [modelUrl]);
 
   return (
     <div className="relative w-full max-w-md mx-auto aspect-square rounded-3xl overflow-hidden shadow-2xl bg-gradient-to-b from-rose-950/20 via-pink-950/10 to-rose-950/30 border border-rose-300/20 backdrop-blur-md">
@@ -229,7 +226,7 @@ export const BouquetViewer: React.FC = () => {
           <svg className="w-5 h-5 mr-2 -ml-1 text-white animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5" />
           </svg>
-          {arActive ? 'AR Active' : arSupported ? 'View Bouquet in AR' : 'View 3D Bouquet'}
+          {arActive ? 'AR Active' : arSupported ? 'View Gift in AR' : 'View 3D Gift'}
         </button>
       </div>
       <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-[10px] tracking-widest uppercase text-rose-200">
