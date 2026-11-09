@@ -31,7 +31,7 @@ export const CAMPAIGN_INFO = {
   heading: "HAPPY CHILDREN'S DAY 2026!",
   subheading: "Every great innovation starts with curiosity. Keep dreaming, keep exploring, and keep creating!",
   footer: "With Love, AI CLUB ❤️",
-  bouquetModelGlb: "https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Assets@main/Models/GlassVaseFlowers/glTF-Binary/GlassVaseFlowers.glb",
+  bouquetModelGlb: "/bouquet.glb",
   bouquetModelUsdz: "",
 };
 
